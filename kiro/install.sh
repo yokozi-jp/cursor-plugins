@@ -4,16 +4,25 @@
 #   kiro/install.sh                Into ~/.kiro, for every repository on this machine.
 # Both write ~/.kiro/settings/permissions.yaml when it does not exist.
 # Rerun to update. It replaces what it installed before and never touches other files.
-# .kiro/.kiro-plugins-installed lists each installed path and its content_hash, tab-separated.
+# .kiro/.kiro-plugins-installed starts with "# cursor-plugins <commit>", then lists each installed path and its content_hash, tab-separated.
+# With --repo, the commit must be clean so that the recorded commit reproduces the installed files.
 set -euo pipefail
 
 src="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 kiro_src="$src/kiro"
 
+# Skills that are not installed. Add the reason when you add a name.
+#   setup-pstack     Models are set in kiro/agents/*.md instead.
+#   make-bot-ui      Needs Cursor's update_state tool and Routines panel.
+#   ketchup-video    Needs a chat that embeds video.
+#   reflect          Rewrites installed skills, so the installed files stop matching their recorded hashes.
+excluded_skills=(setup-pstack make-bot-ui ketchup-video reflect)
+
 skill_dirs() {
-  local d
+  local d name
   for d in "$src"/pstack/skills/*/ "$src"/thermos/skills/*/ "$kiro_src"/skills/*/; do
-    [[ "$(basename "$d")" == setup-pstack ]] && continue
+    name="$(basename "$d")"
+    [[ " ${excluded_skills[*]} " == *" $name "* ]] && continue
     echo "${d%/}"
   done
   for d in deslop control-cli control-ui; do echo "$src/cursor-team-kit/skills/$d"; done
@@ -29,6 +38,16 @@ agent_body_source() {
 }
 
 warn() { printf 'skip: %s\n' "$*" >&2; }
+
+# A manifest line may only name a skill, agent, or steering file directly under .kiro/. Update deletes what it names.
+valid_manifest_path() { [[ "$1" =~ ^(skills|agents|steering)/[^/]+$ || "$1" == kiro-permissions.yaml ]]; }
+
+source_commit() {
+  local commit
+  commit="$(git -C "$src" rev-parse HEAD)" || { echo "$src is not a git checkout, so the source commit is unknown." >&2; exit 1; }
+  [[ -z "$(git -C "$src" status --porcelain)" ]] || commit="$commit-dirty"
+  echo "$commit"
+}
 
 # content_hash <path>: SHA-256 over each file's relative path then its bytes, files in byte order.
 # A file hashes as itself with an empty path. Repositories can recompute it to detect local edits.
@@ -47,7 +66,9 @@ install_into() {
   for old in "$manifest" "$kiro/.pstack-installed"; do
     [[ -f "$old" ]] || continue
     while IFS=$'\t' read -r name _; do
-      [[ -n "$name" ]] && rm -rf "${kiro:?}/$name"
+      [[ -z "$name" || "$name" == \#* ]] && continue
+      valid_manifest_path "$name" || { warn "$old names $name, which is not a skill, agent, or steering file. Left in place."; continue; }
+      rm -rf "${kiro:?}/$name"
     done < "$old"
     rm "$old"
   done
@@ -79,9 +100,12 @@ install_into() {
     claim "$name" && cp "$f" "$kiro/$name"
   done
 
-  while IFS= read -r name; do
-    printf '%s\t%s\n' "$name" "$(content_hash "$kiro/$name")"
-  done < "$manifest.new" > "$manifest"
+  {
+    printf '# cursor-plugins %s\n' "$(source_commit)"
+    while IFS= read -r name; do
+      printf '%s\t%s\n' "$name" "$(content_hash "$kiro/$name")"
+    done < "$manifest.new"
+  } > "$manifest"
   rm "$manifest.new"
 }
 
@@ -101,6 +125,7 @@ case "${1:-}" in
     [[ -n "${2:-}" ]] || { echo "usage: $0 --repo <dir>" >&2; exit 2; }
     repo="$(cd "$2" && pwd)"
     [[ "$repo" == "$src" ]] && { echo "Install into another repository, not this one." >&2; exit 1; }
+    [[ "$(source_commit)" != *-dirty ]] || { echo "Commit or stash your changes in $src first. The manifest records the commit that produced the files." >&2; exit 1; }
     rm -f "$repo/.kiro/kiro-permissions.yaml"
     install_into "$repo/.kiro"
     cp "$kiro_src/permissions.yaml" "$repo/.kiro/kiro-permissions.yaml"
