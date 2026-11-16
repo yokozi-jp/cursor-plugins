@@ -4,6 +4,7 @@
 #   kiro/install.sh                Into ~/.kiro, for every repository on this machine.
 # Both write ~/.kiro/settings/permissions.yaml when it does not exist.
 # Rerun to update. It replaces what it installed before and never touches other files.
+# .kiro/.kiro-plugins-installed lists each installed path and its content_hash, tab-separated.
 set -euo pipefail
 
 src="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -29,13 +30,23 @@ agent_body_source() {
 
 warn() { printf 'skip: %s\n' "$*" >&2; }
 
+# content_hash <path>: SHA-256 over each file's relative path then its bytes, files in byte order.
+# A file hashes as itself with an empty path. Repositories can recompute it to detect local edits.
+content_hash() (
+  if [[ -d "$1" ]]; then
+    cd "$1" && find . -type f | sed 's#^\./##' | LC_ALL=C sort | while IFS= read -r f; do printf '%s' "$f"; cat -- "$f"; done
+  else
+    cat -- "$1"
+  fi | sha256sum | cut -d' ' -f1
+)
+
 install_into() {
   local kiro="$1" manifest="$1/.kiro-plugins-installed" old name f body
   mkdir -p "$kiro/skills" "$kiro/agents" "$kiro/steering"
 
   for old in "$manifest" "$kiro/.pstack-installed"; do
     [[ -f "$old" ]] || continue
-    while IFS= read -r name; do
+    while IFS=$'\t' read -r name _; do
       [[ -n "$name" ]] && rm -rf "${kiro:?}/$name"
     done < "$old"
     rm "$old"
@@ -68,7 +79,10 @@ install_into() {
     claim "$name" && cp "$f" "$kiro/$name"
   done
 
-  mv "$manifest.new" "$manifest"
+  while IFS= read -r name; do
+    printf '%s\t%s\n' "$name" "$(content_hash "$kiro/$name")"
+  done < "$manifest.new" > "$manifest"
+  rm "$manifest.new"
 }
 
 install_user_permissions() {
@@ -87,9 +101,10 @@ case "${1:-}" in
     [[ -n "${2:-}" ]] || { echo "usage: $0 --repo <dir>" >&2; exit 2; }
     repo="$(cd "$2" && pwd)"
     [[ "$repo" == "$src" ]] && { echo "Install into another repository, not this one." >&2; exit 1; }
+    rm -f "$repo/.kiro/kiro-permissions.yaml"
     install_into "$repo/.kiro"
     cp "$kiro_src/permissions.yaml" "$repo/.kiro/kiro-permissions.yaml"
-    echo "kiro-permissions.yaml" >> "$repo/.kiro/.kiro-plugins-installed"
+    printf 'kiro-permissions.yaml\t%s\n' "$(content_hash "$repo/.kiro/kiro-permissions.yaml")" >> "$repo/.kiro/.kiro-plugins-installed"
     install_user_permissions
     echo "Installed into $repo/.kiro. Commit .kiro/."
     ;;
