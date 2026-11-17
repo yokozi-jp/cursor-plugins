@@ -38,7 +38,7 @@ Start Kiro CLI. If "Trust this workspace?" appears, choose Trust. To update, run
 
 - **Sync with upstream:** click "Sync fork" on GitHub, or run `git fetch upstream && git merge upstream/main && git push`. Then run the install commands in each repository that has it.
 - **Change a model:** `model` and `effortLevel` in `kiro/agents/*.md`. List valid models with `kiro-cli chat --list-models`.
-- **Change which skills install:** `skill_dirs` and `excluded_skills` in `kiro/install.sh`. Give a reason for each excluded skill.
+- **Change which skills install:** `skill_dirs` and `excluded_skills` in `kiro/install.sh`. Give a reason for each excluded skill, and name it on the line of `kiro/skills/kiro-adapter/SKILL.md` that cites `excluded_skills`. `install.sh` stops when a name is missing there.
 - **Map a new Cursor name:** `kiro/skills/kiro-adapter/SKILL.md`. When an upstream skill starts using a Cursor name it doesn't map, add a row there.
 
 ## Every repository on your machine

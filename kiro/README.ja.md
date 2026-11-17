@@ -38,7 +38,7 @@ Kiro CLI を起動し、「Trust this workspace?」が出たら Trust を選ぶ�
 
 - **upstream と同期する:** GitHub の「Sync fork」を押すか、`git fetch upstream && git merge upstream/main && git push`。そのあと、入れてある各リポジトリで「リポジトリに入れる」のコマンドを実行する。
 - **モデルを変える:** `kiro/agents/*.md` の `model` と `effortLevel`。使えるモデルは `kiro-cli chat --list-models` で確かめる。
-- **入れるスキルを変える:** `kiro/install.sh` の `skill_dirs` と `excluded_skills`。除外するスキルには理由を書く。
+- **入れるスキルを変える:** `kiro/install.sh` の `skill_dirs` と `excluded_skills`。除外するスキルには理由を書き、`kiro/skills/kiro-adapter/SKILL.md` の `excluded_skills` を挙げる行にも名前を足す。名前が欠けていると `install.sh` は止まる。
 - **Cursor の名前の読み替えを足す:** `kiro/skills/kiro-adapter/SKILL.md`。upstream のスキルに新しい Cursor の名前が出てきたら、ここに行を足す。
 
 ## 自分のマシンの全リポジトリで使う
